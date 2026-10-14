@@ -49,7 +49,7 @@ download() { curl --fail --location --show-error --silent --retry 3 --connect-ti
 echo "Downloading $REPOSITORY ($REF)..."
 download "https://codeload.github.com/$REPOSITORY/zip/refs/heads/$REF" "$stage/repository.zip"
 python3 - "$stage" <<'PY'
-import pathlib, sys, zipfile
+import pathlib, sys, zipfile, hashlib
 stage = pathlib.Path(sys.argv[1])
 def extract(source, destination):
     destination.mkdir(parents=True, exist_ok=True)
@@ -62,11 +62,13 @@ def extract(source, destination):
                 raise SystemExit('Symbolic links in project archive are not supported')
         archive.extractall(destination)
 extract(stage/'repository.zip', stage/'repository')
+known_bundle = False
 candidates = list((stage/'repository').glob('*/Cargo.toml'))
 if not candidates:
     bundles = list((stage/'repository').glob('*/ALIREZATUNEL*.zip'))
     if len(bundles) != 1:
         raise SystemExit('Upload one ALIREZATUNEL ZIP next to bootstrap.sh in the GitHub repository root, or upload the extracted project files there.')
+    known_bundle = hashlib.sha256(bundles[0].read_bytes()).hexdigest() == 'efe9eff8db2ad313a3950c0d7f4d715af974c0cd93bbae90e09c7efa13064196'
     extract(bundles[0], stage/'package')
     candidates = ([stage/'package'/'Cargo.toml'] if (stage/'package'/'Cargo.toml').is_file() else list((stage/'package').glob('*/Cargo.toml')))
 if len(candidates) != 1:
@@ -78,10 +80,85 @@ required = ['install.sh', 'scripts/build-alirezatunel.sh', 'scripts/alirezatunel
 for name in required:
     if not (root/name).is_file():
         raise SystemExit('Incomplete project: missing '+name)
+# The recognized ZIP is the previously validated source + production web bundle.
+# Unknown/edited bundles must rebuild the web UI rather than assume it is current.
+if known_bundle:
+    web = root/'panel/web'
+    files = [p for folder in ['src', 'dist'] for p in (web/folder).rglob('*')
+             if p.is_file() and p != web/'dist/source.sha256']
+    files += [web/p for p in ['index.html','package.json','package-lock.json','vite.config.ts','tsconfig.json']]
+    manifest = ''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.relative_to(web).as_posix()+'\n'
+                       for p in sorted(files,key=lambda p:p.relative_to(web).as_posix()))
+    (web/'dist/source.sha256').write_text(manifest)
 (stage/'source-path').write_text(str(root))
 print('ALIREZATUNEL source layout validated.')
 PY
 source_root=$(cat "$stage/source-path")
+legacy_build_sum=$(sha256sum "$source_root/scripts/build-alirezatunel.sh")
+legacy_build_sha=${legacy_build_sum%% *}
+if [[ $legacy_build_sha == 6b0cd81f029482e85040ca869c460318b5a87979118e8b2278e4763b7941d57b ]]; then
+  cat > "$source_root/scripts/build-alirezatunel.sh" <<'ALIREZATUNEL_BUILD_SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+project_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$project_root"
+for tool in cargo go; do
+  command -v "$tool" >/dev/null || { echo "Missing build dependency: $tool" >&2; exit 1; }
+done
+if [[ -s panel/web/dist/index.html && -s panel/web/dist/source.sha256 ]] && \
+    (cd panel/web && sha256sum -c dist/source.sha256 --status); then
+  echo 'Using the verified, prebuilt web interface.'
+else
+  for tool in node npm; do
+    command -v "$tool" >/dev/null || { echo "Missing web-build dependency: $tool" >&2; exit 1; }
+  done
+  npm --prefix panel/web ci --no-audit --no-fund
+  npm --prefix panel/web run build
+  (
+    cd panel/web
+    { find src dist -type f ! -path dist/source.sha256 -print0 | LC_ALL=C sort -z | xargs -0 sha256sum;
+      sha256sum index.html package.json package-lock.json vite.config.ts tsconfig.json;
+    } > dist/source.sha256
+  )
+fi
+jobs="${ALIREZATUNEL_BUILD_JOBS:-}"
+if [[ -z $jobs ]]; then
+  cpus=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)
+  [[ $cpus =~ ^[1-9][0-9]*$ ]] || cpus=1
+  available_kb=$(awk '/MemAvailable:/ {print $2; exit}' /proc/meminfo 2>/dev/null || true)
+  [[ $available_kb =~ ^[0-9]+$ ]] || available_kb=1048576
+  if [[ -r /sys/fs/cgroup/memory.max && -r /sys/fs/cgroup/memory.current ]]; then
+    limit=$(cat /sys/fs/cgroup/memory.max)
+    used=$(cat /sys/fs/cgroup/memory.current)
+    if [[ $limit =~ ^[0-9]+$ && $used =~ ^[0-9]+$ ]] && (( limit > used )); then
+      remaining_kb=$(( (limit - used) / 1024 ))
+      (( available_kb <= remaining_kb )) || available_kb=$remaining_kb
+    fi
+  fi
+  jobs=$(( available_kb / 786432 ))
+  (( jobs >= 1 )) || jobs=1
+  (( jobs <= cpus )) || jobs=$cpus
+  (( jobs <= 4 )) || jobs=4
+fi
+[[ $jobs =~ ^[1-9][0-9]*$ ]] && (( jobs <= 64 )) || { echo 'ALIREZATUNEL_BUILD_JOBS must be 1..64.' >&2; exit 1; }
+export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$project_root/target}"
+mkdir -p "$CARGO_TARGET_DIR"
+CARGO_TARGET_DIR="$(cd "$CARGO_TARGET_DIR" && pwd)"
+echo "Building optimized native programs with $jobs parallel job(s); cache: $CARGO_TARGET_DIR"
+echo 'The final link can take several minutes without changing the progress counter.'
+KARIZ_BUILD_VERSION=2.5.1-alirezatunel.1 cargo build --release --locked --workspace --jobs "$jobs"
+mkdir -p build
+cp "$CARGO_TARGET_DIR/release/kariz" build/kariz
+cp "$CARGO_TARGET_DIR/release/kariz-panel" build/kariz-panel
+(
+  cd engines/backpack
+  GOMAXPROCS="$jobs" go build -p "$jobs" -trimpath -buildvcs=false -o "$project_root/build/alirezatunel-backpack" .
+)
+cd build
+sha256sum kariz kariz-panel alirezatunel-backpack > SHA256SUMS
+echo "ALIREZATUNEL built successfully. Run: sudo bash install.sh panel (from the project root)."
+ALIREZATUNEL_BUILD_SCRIPT
+fi
 if (( CHECK_SOURCE )); then echo 'Source check passed. No installation was performed.'; exit 0; fi
 
 case "$(uname -m)" in
@@ -120,6 +197,11 @@ PY
   tar -xzf "$stage/$go_file" -C "$stage/go-unpack"
   mv "$stage/go-unpack" "$go_root"
 fi
+node_bin=""
+if [[ -s "$source_root/panel/web/dist/index.html" && -s "$source_root/panel/web/dist/source.sha256" ]] && \
+    (cd "$source_root/panel/web" && sha256sum -c dist/source.sha256 --status); then
+  echo 'Verified web bundle is included; Node.js download and web compilation are unnecessary.'
+else
 echo 'Installing a verified Node.js 22 toolchain...'
 download 'https://nodejs.org/dist/latest-v22.x/SHASUMS256.txt' "$stage/node-checksums"
 read -r node_checksum node_file < <(python3 - "$stage/node-checksums" "$node_arch" <<'PY'
@@ -138,16 +220,26 @@ if [[ ! -x "$toolchain_dir/$node_folder/bin/node" ]]; then
   printf '%s  %s\n' "$node_checksum" "$stage/$node_file" | sha256sum -c -
   tar -xJf "$stage/$node_file" -C "$toolchain_dir"
 fi
+  node_bin="$toolchain_dir/$node_folder/bin"
+fi
 export CARGO_HOME="$toolchain_dir/cargo"
 export RUSTUP_HOME="$toolchain_dir/rustup"
 export GOROOT="$go_root/go"
-export PATH="$CARGO_HOME/bin:$GOROOT/bin:$toolchain_dir/$node_folder/bin:$PATH"
+export PATH="$CARGO_HOME/bin:$GOROOT/bin${node_bin:+:$node_bin}:$PATH"
+export CARGO_PROFILE_RELEASE_LTO=thin
+export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=8
+export CARGO_TARGET_DIR=/opt/alirezatunel/cache/rust-target
+export GOCACHE=/opt/alirezatunel/cache/go-build
+export GOPATH=/opt/alirezatunel/cache/go-modules
+mkdir -p "$CARGO_TARGET_DIR" "$GOCACHE" "$GOPATH"
 if [[ ! -x "$CARGO_HOME/bin/rustup" ]]; then
   download https://sh.rustup.rs "$stage/rustup-init.sh"
   sh "$stage/rustup-init.sh" -y --profile minimal --no-modify-path --default-toolchain stable
-else
+elif ! rustup run stable rustc --version >/dev/null 2>&1; then
   rustup toolchain install stable --profile minimal
   rustup default stable
+else
+  echo 'Using the existing stable Rust toolchain.'
 fi
 install_id=$(date -u +%Y%m%dT%H%M%SZ)-$$
 project_dir="/opt/alirezatunel/sources/$install_id"
