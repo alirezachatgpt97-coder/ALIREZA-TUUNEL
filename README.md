@@ -1,117 +1,51 @@
-# ALIREZATUNEL
+# ALIREZATUNEL — نصب بدون کامپایل
 
-پنل کاریز با گزینهٔ موتور **BackPack** در همان بخش ساخت و مدیریت تانل.
-نام نمایشی پنل **ALIREZATUNEL** است؛ طراحی، استایل‌ها و ساختار اصلی پنل کاریز حفظ شده‌اند.
-کل سورس کاریز، سورس موتور BackPack، رابط وب، نصب‌کننده، تست‌ها و راهنمای فارسی در این بسته هستند.
+ظاهر، امکانات و پروتکل‌های پروژه حفظ شده‌اند. موتور BackPack همراه هسته و پنل کاریز در بستهٔ اجرایی قرار دارد. نصب‌کننده Rust، Go و Node نصب نمی‌کند؛ فقط فایل اجرایی متناسب با پردازنده را دانلود و پس از بررسی SHA256 نصب می‌کند. سرور Linux دارای systemd لازم است.
 
-## آپلود روی گیت‌هاب
+## آپلود در گیت‌هاب
 
-این بسته برای مخزن زیر آماده شده است:
+این ZIP را روی کامپیوتر استخراج کنید. فایل‌های `bootstrap.sh`، `install.sh`، `SHA256SUMS` و دو فایل `ALIREZATUNEL-linux-*.tar.gz` را در ریشهٔ مخزن زیر آپلود کنید؛ خود فایل‌های tar.gz را استخراج نکنید:
 
 https://github.com/alirezachatgpt97-coder/ALIREZA-TUUNEL
 
-ZIP جدید بدون پوشهٔ اضافی بسته‌بندی شده است. پس از استخراج، `bootstrap.sh`،
-`install.sh`، `Cargo.toml` و `README.md` کنار هم قرار دارند.
+فایل `ALIREZATUNEL-SOURCE.zip` هم سورس کامل همین نسخه است؛ آن را بدون استخراج در همان مخزن نگه دارید. هر فایل جداگانه آپلود می‌شود و نیازی به آپلود هزاران فایل نیست.
 
-دو روش برای آپلود دارید:
-
-1. **روش ساده:** فقط فایل `bootstrap.sh` استخراج‌شده و خود فایل
-   `ALIREZATUNEL-GITHUB.zip` را کنار هم در ریشهٔ مخزن روی شاخهٔ `main` آپلود کنید.
-   نیازی به آپلود تک‌تک فایل‌های پروژه نیست؛ اسکریپت ZIP را خودکار استخراج می‌کند.
-2. **سورس کامل:** محتویات استخراج‌شدهٔ همین ZIP را با Git یا GitHub Desktop
-   در ریشهٔ همان مخزن آپلود کنید. `Cargo.toml` و `bootstrap.sh` باید در صفحهٔ اصلی
-   مخزن دیده شوند؛ پوشهٔ اضافی `ALIREZATUNEL` دور فایل‌ها قرار نگیرد.
-
-اگر روش اول را انتخاب می‌کنید، فقط یک ZIP از پروژه در ریشهٔ مخزن نگه دارید تا
-نصب‌کننده بین نسخه‌های مختلف ZIP سردرگم نشود.
-
-## نصب تک‌خطی پنل
-
-پس از آپلود، روی سرور **Ubuntu یا Debian با systemd و دسترسی root** اجرا کنید:
+## نصب پنل، با کاربر root
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/alirezachatgpt97-coder/ALIREZA-TUUNEL/main/bootstrap.sh) panel
+curl -fL --retry 3 https://raw.githubusercontent.com/alirezachatgpt97-coder/ALIREZA-TUUNEL/main/bootstrap.sh -o /root/alirezatunel-install.sh && bash /root/alirezatunel-install.sh panel
 ```
 
-اسکریپت بستهٔ پروژه، ابزارهای ساخت و Rust/Cargo، Node.js 22 و نسخهٔ Go موردنیاز
-موتور را دریافت می‌کند، برنامه‌ها را می‌سازد و سرویس پنل را نصب می‌کند.
-در پایان IP عمومی یا دامنه را می‌پرسد و لینک یک‌بارمصرف ورود را نشان می‌دهد.
-برای سرور بدون curl، ابتدا `apt-get update && apt-get install -y curl ca-certificates` را اجرا کنید.
-
-نسخه با IP یا دامنهٔ مشخص:
+## نصب سرور عامل
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/alirezachatgpt97-coder/ALIREZA-TUUNEL/main/bootstrap.sh) panel --host YOUR_PUBLIC_IP
+curl -fL --retry 3 https://raw.githubusercontent.com/alirezachatgpt97-coder/ALIREZA-TUUNEL/main/bootstrap.sh -o /root/alirezatunel-install.sh && bash /root/alirezatunel-install.sh agent
 ```
 
-### نصب سرور دوم / agent
+سپس در پنل سرور را اضافه کنید و فرمان `alirezatunel-join` نمایش‌داده‌شده را روی عامل اجرا کنید.
+
+## نصب دستی با یک اسکریپت
+
+فایل `install.sh` همین بسته را در `/root` قرار دهید؛ این فایل بقیهٔ بسته را از مخزن دانلود می‌کند:
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/alirezachatgpt97-coder/ALIREZA-TUUNEL/main/bootstrap.sh) agent
+bash /root/install.sh panel
 ```
 
-در پنل، گزینهٔ اضافه‌کردن سرور را انتخاب کنید و کد اتصال را به اسکریپت بدهید.
-اگر بعداً می‌خواهید سرور را وصل کنید:
+## نصب دستی از بستهٔ اجرایی
+
+فایل tar.gz مناسب معماری سرور را به همراه SHA256SUMS در یک پوشه کپی کنید؛ سپس با root (برای ARM64 نام فایل را عوض کنید):
 
 ```bash
-sudo alirezatunel-join JOIN_CODE_FROM_PANEL
+sha256sum -c SHA256SUMS --ignore-missing
+tar -xzf ALIREZATUNEL-linux-amd64.tar.gz
+bash install.sh panel --no-build
 ```
 
-بعد از اتصال دو سرور، در فرم ساخت تانل گزینهٔ **backpack** را انتخاب کنید.
-پورت‌های پنل، ارتباط agent، تانل و سرویس‌ها باید در فایروال مجاز باشند.
-ساخت اول به اینترنت و فضای کافی نیاز دارد و ممکن است چند دقیقه طول بکشد.
-این دستورها روی سرور لینوکس اجرا می‌شوند، نه در CMD ویندوز.
-نصب خودکار کامل روی VPS هنوز آزمایش نشده است؛ وضعیت آزمون‌های پروژه در
-[گزارش بررسی ساخت](docs/BUILD_VERIFICATION.md) آمده است.
-
-### بررسی بسته بدون نصب
+برای لینک ورود:
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/alirezachatgpt97-coder/ALIREZA-TUUNEL/main/bootstrap.sh) --check-source
+kariz-panel login-link --host SERVER_IP
 ```
 
-### نصب دستی از سورس
-
-اگر ابزارهای ساخت از قبل نصب هستند:
-
-```bash
-sudo bash install.sh panel
-sudo kariz-panel login-link --host YOUR_SERVER_IP
-```
-
-[راهنمای کامل فارسی و تنظیمات پیشرفته](docs/ALIREZATUNEL.md)
-
-## امکانات
-
-- ۱۲ روش انتقال معکوس BackPack، شامل Stealth، PCK، KCP/FEC، QUIC و ICMP.
-- مستقیم لایهٔ ۳ با carrierهای UDP، PCK، QUIC، SNI، ICMP و raw IP.
-- پروفایل‌های سرعت، FEC، مسیرهای جایگزین، health failover و load balancing.
-- ساخت، ویرایش، تعویض توکن و مدیریت دو سر تانل از همان پنل.
-- وضعیت واقعی اتصال موتور، نمودار ترافیک، لاگ systemd و هشدارها.
-- تونل ترافیک سرویس‌های پروکسی، WireGuard و DNS موجود با انتخاب صحیح TCP/UDP.
-
-موتور BackPack جداگانه اجرا می‌شود و پروتکل کاریز تغییر نکرده است.
-پنل، سرویس WireGuard، DNS یا کانفیگ پروکسی جدید ایجاد نمی‌کند؛ ترافیک آن‌ها را حمل می‌کند.
-جزئیات امکانات ادغام‌شده و محدودیت‌های آزمون در راهنما آمده‌اند.
-
-## ساخت و آزمون
-
-```bash
-bash scripts/build-alirezatunel.sh
-ALIREZATUNEL_BACKPACK_BINARY="$PWD/build/alirezatunel-backpack" cargo test -p kariz-panel --lib --test backpack
-```
-
-ساخت اول وابستگی‌ها را از اینترنت دریافت می‌کند. نتیجه در `build/` قرار می‌گیرد.
-برای نصب از ساخت آمادهٔ همین معماری: `sudo bash install.sh panel --no-build`.
-
-## Attribution
-
-Based on BackPack by Amin Mohammadi (AminMGMT)
-https://github.com/AminMGMT/BackPack
-
-Based on the supplied Kariz archive by Erfan-XRay.
-Original notices and licenses remain in `LICENSE`, `NOTICE` and `engines/backpack/`.
-The Kariz license restricts modified/rebranded deployment and distribution; this package does not grant additional rights.
-
-Original upstream documentation is retained in `docs/UPSTREAM_README.md`,
-`docs/UPSTREAM_README_FA.md`, `docs/` and `engines/backpack/docs/`.
+این بسته زمان کامپایل روی VPS را حذف می‌کند. زمان دانلود به اتصال شبکه بستگی دارد؛ RAM یک‌گیگ تضمین ظرفیت همهٔ بارهای ترافیکی نیست. سرویس‌ها و داده‌های موجود در مسیرهای اصلی کاریز حفظ می‌شوند. مجوزها و انتساب‌های سورس داخل بسته موجود است.
